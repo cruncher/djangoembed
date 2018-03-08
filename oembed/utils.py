@@ -1,5 +1,6 @@
 import httplib2
 import re
+import requests
 
 from django.conf import settings
 from django.contrib.sites.models import Site
@@ -66,17 +67,17 @@ def scale(width, height, new_width, new_height=None):
     if width < new_width:
         if not new_height or height < new_height:
             return (width, height)
-    
+
     # calculate ratios
     width_percent = (new_width / float(width))
     if new_height:
         height_percent = (new_height / float(height))
-    
+
     if not new_height or width_percent < height_percent:
         new_height = int((float(height) * float(width_percent)))
     else:
         new_width = int((float(width) * float(height_percent)))
-    
+
     return (new_width, new_height)
 
 def fetch_url(url, method='GET', user_agent='django-oembed', timeout=SOCKET_TIMEOUT):
@@ -84,12 +85,15 @@ def fetch_url(url, method='GET', user_agent='django-oembed', timeout=SOCKET_TIME
     Fetch response headers and data from a URL, raising a generic exception
     for any kind of failure.
     """
-    sock = httplib2.Http(timeout=timeout)
+
+    # sock = httplib2.Http(timeout=timeout)
     request_headers = {
         'User-Agent': user_agent,
         'Accept-Encoding': 'gzip'}
     try:
-        headers, raw = sock.request(url, headers=request_headers, method=method)
+        # headers, raw = sock.request(url, headers=request_headers, method=method)
+        resp = requests.request(method=method, url=url, headers=request_headers)
+        headers, raw = resp.headers, resp.content
     except:
         raise OEmbedHTTPException('Error fetching %s' % url)
     return headers, raw
@@ -124,7 +128,7 @@ def mock_request():
 def load_class(path):
     """
     dynamically load a class given a string of the format
-    
+
     package.Class
     """
     package, klass = path.rsplit('.', 1)
@@ -136,30 +140,30 @@ def cleaned_sites():
     Create a list of tuples mapping domains from the sites table to their
     site name.  The domains will be cleaned into regexes that may be
     more permissive than the site domain is in the db.
-    
+
     [(domain_regex, domain_name, domain_string), ...]
     """
     mappings = {}
     for site in Site.objects.all():
         # match the site domain, breaking it into several pieces
         match = re.match(r'(https?://)?(www[^\.]*\.)?([^/]+)', site.domain)
-        
+
         if match is not None:
             http, www, domain = match.groups()
-            
+
             # if the protocol is specified, use it, otherwise accept 80/443
             http_re = http or r'https?:\/\/'
-            
+
             # whether or not there's a www (or www2 :x) allow it in the match
             www_re = r'(?:www[^\.]*\.)?'
-            
+
             # build a regex of the permissive http re, the www re, and the domain
             domain_re = http_re + www_re + domain
-            
+
             # now build a pretty string representation of the domain
             http = http or r'http://'
             www = www or ''
             normalized = http + www + domain
-            
+
             mappings[site.pk] = (domain_re, site.name, normalized)
     return mappings
